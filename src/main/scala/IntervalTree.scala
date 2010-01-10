@@ -1,78 +1,86 @@
 class IntervalTree {
+  /**
+   * Add a few methods to Range useful in implementing the Black&Red Tree
+   */
   case class Interval(start: Int, end: Int) extends Ordered[Interval] {
-    override def equals(other: Any) = other match { // This equality rule is unhashable
-      case that: Interval => this <= that && that <= this
-      case _ => false
-    }
     def compare(that: Interval) = (start compare that.start, end compare that.end) match {
       case (-1, -1) => -1
       case (1, 1) => 1
       case _ => 0
     }
-    def contains(p: Int) = start <= p && p <= end
-    def center = start + (end - start) / 2
-    lazy val centralized = Interval(center, center) // Must be either lazy or def to avoid infinite recursion
+    def contains(point: Int) = start <= point && point <= end
+    def intersects(that: Interval) = (that contains start) || (that contains end)
+    val center = start + (end - start) / 2
+    def centralized = Interval(center, center) // Must be either lazy or def to avoid infinite recursion
   }
   object Interval {
     implicit def fromRange(r: Range) = Interval(r.first, r.last)
     implicit def toRange(i: Interval) = i.start to i.end
   }
+
+  import Interval._ // Add "Interval" methods to Range
   
-  case class Node(byStart: List[Interval], byEnd: List[Interval]) {
-    def this(i: Interval) = this(List(i), List(i))
-    def this(point: Int) = this(Interval(point, point))
-    def insert(i: Interval): Node = {
-      if (byStart contains i) return this
-      val (byStartBefore, byStartAfter) = byStart span (_.start < i.start)
-      val (byEndBefore, byEndAfter) = byEnd span (_.end < i.end)
-      Node(byStartBefore ::: i :: byStartAfter, byEndBefore ::: i :: byEndAfter)
+  case class Node(byStart: List[Range], byEnd: List[Range]) {
+    def this(r: Range) = this(List(r), List(r))
+    def this(point: Int) = this(point to point)
+    def insert(r: Range): Node = {
+      if (byStart contains r) return this
+      val (byStartBefore, byStartAfter) = byStart span (_.head < r.head)
+      val (byEndBefore, byEndAfter) = byEnd span (_.last < r.last)
+      Node(byStartBefore ::: r :: byStartAfter, byEndBefore ::: r :: byEndAfter)
     }
-    def delete(i: Interval): Node = {
-      if (!byStart.contains(i)) return this
-      Node(byStart filter (_ != i), byEnd filter (_ != i))
+    def delete(r: Range): Node = {
+      if (!byStart.contains(r)) return this
+      Node(byStart filter (_ != r), byEnd filter (_ != r))
     }
   }
   object Node {
-    def apply(i: Interval) = new Node(i)
+    def apply(r: Range) = new Node(r)
     def apply(point: Int) = new Node(point)
   }
   
-  object RedBlackInterval extends scala.collection.immutable.RedBlack[Interval] {
-    def isSmaller(x: Interval, y: Interval) = x < y
+  object RedBlackInterval extends scala.collection.immutable.RedBlack[Range] {
+    def isSmaller(x: Range, y: Range) = x < y
   }
   import RedBlackInterval._
   
   var root: Tree[Node] = Empty
   
-  def insert(i: Interval) = {
-      root lookup i match {
-      case Empty => root = root update (i.centralized, Node(i))
-      case ne: NonEmpty[_] => root = root update (ne.key, ne.value insert i)
+  def insert(r: Range) = {
+      root lookup r match {
+      case Empty => root = root update (r.centralized, Node(r))
+      case ne: NonEmpty[_] => root = root update (ne.key, ne.value insert r)
     }
     this
   }
   
-  def delete(i: Interval) = {
-    root lookup i match {
+  def delete(r: Range) = {
+    root lookup r match {
       case Empty => ()
       case ne: NonEmpty[_] =>
-        val newNode = ne.value delete i
+        val newNode = ne.value delete r
         if (newNode.byStart.isEmpty)
-          root = root delete i
+          root = root delete r
         else
           root = root update (ne.key, newNode)
     }
     this
   }
   
-  def lookup(i: Interval) = root lookup i match {
-    case Empty => (Nil, Nil)
-    case ne: NonEmpty[_] => (ne.value.byStart, ne.value.byEnd)
+  def lookup(r: Range) = {
+    def search(t: Tree[Node]): (List[Range], List[Range]) = t match {
+      case Empty => (Nil, Nil)
+      case ne: NonEmpty[_] =>
+        val (byStart, byEnd) = if (ne.key < r) search(ne.left) else search(ne.right)
+        ((ne.value.byStart filter (r intersects _)) ++ byStart,
+         (ne.value.byEnd filter (r intersects _)) ++ byEnd)
+    }
+    search(root)
   }
-  def lookup(point: Int): (List[Interval], List[Interval]) = lookup(Interval(point, point))
+  def lookup(point: Int): (List[Range], List[Range]) = lookup(point to point)
   
-  def range(from: Option[Interval], to: Option[Interval]) = 
-    root.range(from, to).iterator.foldLeft((Nil, Nil): (List[Interval], List[Interval])) {
+  def range(from: Option[Range], to: Option[Range]) =
+    root.range(from, to).iterator.foldLeft((Nil, Nil): (List[Range], List[Range])) {
       case ((bS, bE), (_, n)) => (bS ::: n.byStart, bE ::: n.byEnd)
     }
     
