@@ -16,7 +16,9 @@ object IntervalTreeCheck extends Properties("IntervalTree") {
   implicit def arbIntervalTree: Arbitrary[IntervalTree] = Arbitrary(myIntervalTreeGen)
   
   property("All intervals containing a point are returned") =
-    forAll { (t: IntervalTree, n: Int) => 
-      (t.iteratorByStart.toList.filter(_ contains n) == t.lookup(n)._1) :| (t.iteratorByStart.toList.filter(_ contains n)+"\t"+t.lookup(n)._1) 
+    forAll { (t: IntervalTree, n: Int) => n < 1000 ==>
+      (t.iteratorByStart.toList.filter(_ contains n) == t.lookup(n)._1) :|
+        "Expected: "+(t.iteratorByStart.toList.filter(_ contains n).map(t.rangeToString)+
+        "\nGot: "+t.lookup(n)._1.map(t.rangeToString))
     }
 }

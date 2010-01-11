@@ -71,7 +71,7 @@ class IntervalTree {
     def search(t: Tree[Node]): (List[Range], List[Range]) = t match {
       case Empty => (Nil, Nil)
       case ne: NonEmpty[_] =>
-        val (byStart, byEnd) = if (ne.key < r) search(ne.left) else search(ne.right)
+        val (byStart, byEnd) = if (r < ne.key) search(ne.left) else search(ne.right)
         ((ne.value.byStart filter (r intersects _)) ++ byStart,
          (ne.value.byEnd filter (r intersects _)) ++ byEnd)
     }
@@ -87,5 +87,28 @@ class IntervalTree {
   def iterator = root.elements map (n => (n._2.byStart, n._2.byEnd))
   def iteratorByStart = root.elements flatMap (_._2.byStart.elements)
   def iteratorByEnd = root.elements flatMap (_._2.byEnd.elements)
+
+  def rangeToString(r: Range) = "[%d%s]" format (r.first, if (r.last == r.first) "" else ","+r.last)
+
+  def treeToString(t: Tree[Node], level: Int): String = t match {
+    case Empty => "E\n"
+    case BlackTree(key, value, left, right) =>
+      "Black Center: %s\tRanges: %s\n%s|\n%s+L: %s%s|\n%s+R: %s" format
+        (key, value.byStart map rangeToString mkString ",",
+         "|"*level,
+         "|"*level, treeToString(left, level + 1),
+         "|"*level,
+         "|"*level, treeToString(right, level + 1))
+    case RedTree(key, value, left, right) =>
+      "Red Center: %s\tRanges: %s\n%s|\n%s+L: %s%s|\n%s+R: %s" format
+        (key, value.byStart map rangeToString mkString ",",
+         "|"*level,
+         "|"*level, treeToString(left, level + 1),
+         "|"*level,
+         "|"*level, treeToString(right, level + 1))
+    case other => error("Unexpected "+other)
+  }
+
+  override def toString = "\n"+treeToString(root, 0)
 }
 
